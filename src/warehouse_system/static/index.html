@@ -731,6 +731,8 @@
     </div>
 
     <script>
+        const SESSION_ID = crypto.randomUUID();
+
         // Set password default when tenant changes
         document.getElementById('tenantId').addEventListener('change', function(e) {
             const tenant = e.target.value;
@@ -862,7 +864,7 @@
                 const res = await fetch("/api/chat", {
                     method: "POST",
                     headers: getHeaders(),
-                    body: JSON.stringify({ message: msgText })
+                    body: JSON.stringify({ message: msgText, session_id: SESSION_ID })
                 });
 
                 if (!res.ok) {

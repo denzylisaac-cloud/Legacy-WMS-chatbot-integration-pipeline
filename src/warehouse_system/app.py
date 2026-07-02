@@ -35,6 +35,9 @@ rag = WarehouseRAG(db_uri=RAG_DB_PATH)
 # Global trace log to capture agent communication steps
 trace_logs = []
 
+# In-memory session store for multi-turn conversation context
+SESSION_STORE = {}
+
 def log_trace(caller, callee, action, data=None):
     trace_logs.append({
         "caller": caller,
@@ -525,11 +528,13 @@ async def run_agent_with_retry(config, prompt, max_retries=3, initial_delay=2):
 
 # --- STEP-BY-STEP AGENT RUNNERS ---
 
-async def run_main_agent_intent(query: str) -> dict:
+async def run_main_agent_intent(query: str, history: str = "") -> dict:
     """Invokes Llama-3-Nemotron to extract the query intent and target SKU."""
     log_trace("User", "Main UI Agent", "user_query", {"query": query})
     
     system_instructions = """You are the primary customer-facing Warehouse Assistant. Your job is to analyze the user's natural language query and determine the required action.
+
+You will be provided with the user's current query and a summary of the recent conversation history (if any). If the user uses pronouns or implicit references (e.g., "what about SKU 4471?" or "how much does it weigh?"), use the conversation history to resolve the target SKU.
 
 Analyze the query and classify it into one of four actions:
 1. "delegate_to_logistics": Choose this if the query explicitly asks for logistics calculations, reorder point (ROP), economic order quantity (EOQ), shelf rack capacity constraints checks, newsvendor order quantities, safety stock calculations, or asks whether we need to replenish/order more items.
@@ -546,7 +551,9 @@ Output a JSON object exactly in this format:
 
 Do not output any markdown code blocks, backticks, or other text outside the JSON object."""
     
-    response_text = await run_nvidia_agent(system_instructions, query)
+    prompt_with_history = f"Conversation History:\n{history}\n\nUser Query: {query}" if history else query
+
+    response_text = await run_nvidia_agent(system_instructions, prompt_with_history)
     
     # Robustly parse JSON from response
     intent = {"action": "list_stock", "sku": None}
@@ -814,7 +821,7 @@ If you would like me to calculate reorder quantities or rack capacity checks for
 
 # --- MAIN RUNNER ---
 
-def extract_sku_from_query(query: str, tenant_id: str = "default_tenant") -> str:
+def extract_sku_from_query(query: str, tenant_id: str = "default_tenant", history_sku: str = None) -> str:
     """Dynamically matches any known SKU from the database in the user query."""
     clean_query = query.upper()
     # Split query into alphanumeric words (allowing hyphens)
@@ -836,9 +843,12 @@ def extract_sku_from_query(query: str, tenant_id: str = "default_tenant") -> str
     if sku_match:
         return sku_match.group(0).upper()
         
+    if history_sku and any(w in query.lower() for w in ["it", "this", "that"]):
+        return history_sku
+
     return None
 
-async def run_warehouse_system(user_query: str, tenant_id: str = "default_tenant") -> dict:
+async def run_warehouse_system(user_query: str, tenant_id: str = "default_tenant", session_id: str = None) -> dict:
     """Run the entire tiered agent loop and return the result and execution trace."""
     global trace_logs
     trace_logs = []  # Clear log for a new run
@@ -847,19 +857,39 @@ async def run_warehouse_system(user_query: str, tenant_id: str = "default_tenant
     # Store request-scoped tenant context
     tenant_context.set(tenant_id)
     
+    # Session handling
+    history_context = ""
+    history_sku = None
+    if session_id:
+        if session_id not in SESSION_STORE:
+            SESSION_STORE[session_id] = {"history": [], "last_sku": None}
+
+        session_data = SESSION_STORE[session_id]
+        history_sku = session_data.get("last_sku")
+
+        # Format recent history for the prompt (last 3 turns)
+        recent_history = session_data["history"][-3:]
+        if recent_history:
+            history_context = "\n".join([f"User: {h['query']}\nAgent: {h['response']}" for h in recent_history])
+
     # Extract SKU initially as a fallback/hint, but prioritize Main Agent's classification
-    hint_sku = extract_sku_from_query(user_query, tenant_id=tenant_id)
+    hint_sku = extract_sku_from_query(user_query, tenant_id=tenant_id, history_sku=history_sku)
     sku = hint_sku
     
     try:
         # Step 1: Main UI Agent analyzes user input and classifies required action
-        intent = await run_main_agent_intent(user_query)
+        intent = await run_main_agent_intent(user_query, history=history_context)
         action = intent.get("action", "list_stock")
         sku = intent.get("sku") or hint_sku
         
+        if sku and session_id:
+            SESSION_STORE[session_id]["last_sku"] = sku
+
         if action == "cant_answer":
             msg = "I'm sorry, but that request is out of scope for our Warehouse and Logistics Management System. I can only assist with inventory queries, listing stock, and logistics math calculations."
             log_trace("Main UI Agent", "User", "cant_answer", {"query": user_query})
+            if session_id:
+                SESSION_STORE[session_id]["history"].append({"query": user_query, "response": msg})
             return {
                 "query": user_query,
                 "response": msg,
@@ -879,6 +909,9 @@ async def run_warehouse_system(user_query: str, tenant_id: str = "default_tenant
             # Step 3: Main UI Agent formats final response
             final_response = await run_main_agent_response(user_query, math_report)
             
+            if session_id:
+                SESSION_STORE[session_id]["history"].append({"query": user_query, "response": final_response})
+
             return {
                 "query": user_query,
                 "response": final_response,
@@ -908,6 +941,8 @@ async def run_warehouse_system(user_query: str, tenant_id: str = "default_tenant
             
             # Step 2: Main UI Agent formats final response directly from the record info
             final_response = await run_main_agent_response(user_query, raw_report)
+            if session_id:
+                SESSION_STORE[session_id]["history"].append({"query": user_query, "response": final_response})
             return {
                 "query": user_query,
                 "response": final_response,
@@ -935,6 +970,8 @@ async def run_warehouse_system(user_query: str, tenant_id: str = "default_tenant
             
             # Step 2: Main UI Agent formats final response based strictly on the table rows
             final_response = await run_main_agent_response(user_query, raw_report)
+            if session_id:
+                SESSION_STORE[session_id]["history"].append({"query": user_query, "response": final_response})
             return {
                 "query": user_query,
                 "response": final_response,
@@ -949,4 +986,7 @@ async def run_warehouse_system(user_query: str, tenant_id: str = "default_tenant
             print(f"\n[Processing Issue] Fallback triggered due to parsing or routing error: {e}")
             
         # Run local reasoning engine to guarantee successful trace output
-        return run_local_agent_reasoning(sku or hint_sku, user_query, tenant_id=tenant_id)
+        fallback_res = run_local_agent_reasoning(sku or hint_sku, user_query, tenant_id=tenant_id)
+        if session_id:
+            SESSION_STORE[session_id]["history"].append({"query": user_query, "response": fallback_res["response"]})
+        return fallback_res
