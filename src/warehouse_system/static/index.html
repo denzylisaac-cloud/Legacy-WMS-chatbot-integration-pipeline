@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Logistics Assistant & WMS Ingestion Dashboard</title>
+    <!-- Modern Premium Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f111a;
+            --sidebar-bg: rgba(22, 26, 43, 0.7);
+            --card-bg: rgba(28, 33, 53, 0.55);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-primary: #515dfa;
+            --accent-glow: rgba(81, 93, 250, 0.4);
+            --accent-success: #00e676;
+            --accent-fail: #ff1744;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --glass-blur: blur(16px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(81, 93, 250, 0.1) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(0, 230, 118, 0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Root Layout */
+        .app-container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Sidebar Ingestion Panel */
+        .sidebar {
+            width: 380px;
+            background: var(--sidebar-bg);
+            backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--border-color);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .brand-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .brand-logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-primary), #8e2de2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .brand-logo svg {
+            width: 20px;
+            height: 20px;
+            fill: #fff;
+        }
+
+        .brand-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #ffffff, #a5b4fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        /* Tenant Config Section */
+        .tenant-selector-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        select, input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: #fff;
+            padding: 10px;
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 8px rgba(81, 93, 250, 0.3);
+        }
+
+        /* Sync Button */
+        .sync-btn {
+            background: linear-gradient(135deg, var(--accent-primary), #4338ca);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(81, 93, 250, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .sync-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(81, 93, 250, 0.4);
+        }
+
+        .sync-btn:active {
+            transform: translateY(0);
+        }
+
+        .sync-btn.loading {
+            background: #374151;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        .sync-btn.loading .spinner {
+            display: block;
+        }
+
+        /* Integration Status Section */
+        .dashboard-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        
+        .stat-value.success { color: var(--accent-success); }
+        .stat-value.fail { color: var(--accent-fail); }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        /* WMS Adapter Channels Status */
+        .channels-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .channel-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .channel-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .channel-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .channel-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .channel-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .channel-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-success);
+            box-shadow: 0 0 8px var(--accent-success);
+            animation: pulse-glow 2s infinite;
+        }
+
+        /* Ingestion Logs List */
+        .logs-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .log-item {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+
+        .log-status {
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .log-status.success { color: var(--accent-success); }
+        .log-status.fail { color: var(--accent-fail); }
+
+        .log-details {
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* DLQ Alerts */
+        .dlq-alert-card {
+            background: rgba(255, 23, 68, 0.08);
+            border: 1px solid rgba(255, 23, 68, 0.2);
+            border-radius: 12px;
+            padding: 14px;
+            color: #ff8a80;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .dlq-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .dlq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .dlq-item {
+            font-size: 0.75rem;
+            padding: 6px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+            border-left: 3px solid var(--accent-fail);
+        }
+
+        /* Main Chat Area */
+        .main-chat-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: transparent;
+        }
+
+        .chat-header {
+            height: 70px;
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(15, 17, 26, 0.5);
+            backdrop-filter: var(--glass-blur);
+        }
+
+        .chat-header-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .chat-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .chat-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .chat-history {
+            flex-grow: 1;
+            padding: 30px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Messages */
+        .message-row {
+            display: flex;
+            width: 100%;
+        }
+
+        .message-row.user {
+            justify-content: flex-end;
+        }
+
+        .message-bubble {
+            max-width: 75%;
+            padding: 16px;
+            border-radius: 16px;
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+
+        .message-row.user .message-bubble {
+            background: var(--accent-primary);
+            color: white;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 15px rgba(81, 93, 250, 0.2);
+        }
+
+        .message-row.agent .message-bubble {
+            background: rgba(30, 37, 61, 0.85);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-bottom-left-radius: 4px;
+            color: var(--text-main);
+        }
+
+        /* Markdown tables in bubble */
+        .message-bubble table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 0.85rem;
+        }
+
+        .message-bubble th, .message-bubble td {
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message-bubble th {
+            background: rgba(255,255,255,0.05);
+            font-weight: 600;
+        }
+
+        /* Trace Inspector Details */
+        .trace-inspector {
+            margin-top: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .trace-summary {
+            padding: 10px 14px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.02);
+            transition: background 0.2s ease;
+        }
+
+        .trace-summary:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+
+        .trace-summary::after {
+            content: '▼';
+            font-size: 0.6rem;
+            transition: transform 0.2s ease;
+        }
+
+        details[open] .trace-summary::after {
+            transform: rotate(-180deg);
+        }
+
+        .trace-content {
+            padding: 12px 14px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .trace-step {
+            font-size: 0.75rem;
+            border-left: 2px solid var(--accent-primary);
+            padding-left: 10px;
+            margin-bottom: 4px;
+        }
+
+        .trace-step-header {
+            font-weight: 700;
+            color: #a5b4fc;
+            margin-bottom: 2px;
+        }
+
+        .trace-step-action {
+            color: var(--text-main);
+            margin-bottom: 2px;
+        }
+
+        .trace-step-data {
+            color: var(--text-muted);
+            font-family: monospace;
+            font-size: 0.7rem;
+            background: rgba(0,0,0,0.2);
+            padding: 4px 6px;
+            border-radius: 4px;
+            margin-top: 2px;
+            overflow-x: auto;
+        }
+
+        /* Chat Input Bar */
+        .chat-input-area {
+            padding: 20px 30px;
+            background: rgba(15, 17, 26, 0.4);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .chat-input-wrapper {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .chat-input {
+            width: 100%;
+            background: rgba(28, 33, 53, 0.6);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            color: #fff;
+            padding: 14px 20px;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .chat-input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 15px rgba(81, 93, 250, 0.2);
+        }
+
+        .send-btn {
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(81, 93, 250, 0.3);
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 15px rgba(81, 93, 250, 0.5);
+        }
+
+        .send-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: #fff;
+            transform: rotate(-45deg) translate(2px, -2px);
+        }
+
+        /* Animations */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Panel -->
+        <aside class="sidebar">
+            <div class="brand-section">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2z"/>
+                    </svg>
+                </div>
+                <div class="brand-name">LMS Assistant</div>
+            </div>
+
+            <!-- Tenant Config Scopes -->
+            <div class="tenant-selector-card">
+                <div class="section-title">Tenant Authentication</div>
+                <div class="input-group">
+                    <label for="tenantId">Tenant ID</label>
+                    <select id="tenantId" onchange="loadDashboardStats()">
+                        <option value="default_tenant">default_tenant (CSV Source)</option>
+                        <option value="client_a">client_a (SQLite DB Source)</option>
+                        <option value="client_b">client_b (EDI Source)</option>
+                        <option value="client_c">client_c (REST Source)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="apiToken">API Secret Token</label>
+                    <input type="password" id="apiToken" value="default_pass">
+                </div>
+                <button class="sync-btn" id="syncBtn" onclick="triggerWmsSync()">
+                    <div class="spinner"></div>
+                    <span id="syncText">Sync WMS Adapters</span>
+                </button>
+            </div>
+
+            <!-- Ingestion stats -->
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <span class="stat-value success" id="recordsIngested">0</span>
+                    <span class="stat-label">Ingested Items</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value fail" id="failedJobs">0</span>
+                    <span class="stat-label">Failed Jobs</span>
+                </div>
+            </div>
+
+            <!-- WMS Adapter channels status -->
+            <div class="channels-card">
+                <div class="section-title">Active WMS Channels</div>
+                <div class="channel-row">
+                    <div class="channel-info">
+                        <span class="channel-name">SFTP Drop Folder</span>
+                        <span class="channel-desc">client_a - CSV parser</span>
+                    </div>
+                    <div class="channel-status">
+                        <div class="pulse-dot"></div> Listening
+                    </div>
+                </div>
+                <div class="channel-row">
+                    <div class="channel-info">
+                        <span class="channel-name">SQL DBPoll Agent</span>
+                        <span class="channel-desc">client_b - DB query poll</span>
+                    </div>
+                    <div class="channel-status">
+                        <div class="pulse-dot"></div> Polling
+                    </div>
+                </div>
+                <div class="channel-row">
+                    <div class="channel-info">
+                        <span class="channel-name">EDI Receiver Inbox</span>
+                        <span class="channel-desc">client_c - ANSI X12</span>
+                    </div>
+                    <div class="channel-status">
+                        <div class="pulse-dot"></div> Active
+                    </div>
+                </div>
+            </div>
+
+            <!-- DLQ Alerts -->
+            <div class="dlq-alert-card" id="dlqCard" style="display: none;">
+                <div class="dlq-header">
+                    <svg style="width:18px;height:18px;fill:#ff1744" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    </svg>
+                    <span>DLQ Failure Board</span>
+                </div>
+                <div class="dlq-list" id="dlqList"></div>
+            </div>
+
+            <!-- Ingestion Event Logs -->
+            <div class="logs-section">
+                <div class="section-title">Ingestion Log Stream</div>
+                <div id="logsContainer"></div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Panel -->
+        <main class="main-chat-container">
+            <header class="chat-header">
+                <div class="chat-header-info">
+                    <span class="chat-title">Tiered Assistant Chat</span>
+                    <span class="chat-subtitle" id="chatScope">Scope: default_tenant</span>
+                </div>
+            </header>
+
+            <div class="chat-history" id="chatHistory">
+                <div class="message-row agent">
+                    <div class="message-bubble">
+                        Good day! I am your AI Warehouse Coordinator. I can help you search our inventory catalog, describe storage locations, check physical shelf capacities, and calculate optimal replenishment rates (EOQ, ROP, Safety Stock, Newsvendor). 
+                        <br><br>
+                        What query would you like to execute today?
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="chat-input-wrapper">
+                    <input type="text" class="chat-input" id="messageInput" placeholder="Ask about stock levels, locations, or ROP calculations..." onkeydown="handleKeyPress(event)">
+                </div>
+                <button class="send-btn" onclick="sendMessage()">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Set password default when tenant changes
+        document.getElementById('tenantId').addEventListener('change', function(e) {
+            const tenant = e.target.value;
+            const tokenMap = {
+                "default_tenant": "default_pass",
+                "client_a": "client_a_pass",
+                "client_b": "client_b_pass",
+                "client_c": "client_c_pass"
+            };
+            document.getElementById('apiToken').value = tokenMap[tenant] || "";
+            document.getElementById('chatScope').innerText = "Scope: " + tenant;
+        });
+
+        // Helper to format Base64 Basic Auth Headers
+        function getHeaders() {
+            const tenant = document.getElementById('tenantId').value;
+            const token = document.getElementById('apiToken').value;
+            const creds = btoa(`${tenant}:${token}`);
+            return {
+                "Content-Type": "application/json",
+                "Authorization": `Basic ${creds}`
+            };
+        }
+
+        // Load dashboard statistics
+        async function loadDashboardStats() {
+            try {
+                const res = await fetch("/api/status", { headers: getHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                document.getElementById('recordsIngested').innerText = data.success_records_count;
+                document.getElementById('failedJobs').innerText = data.failed_jobs_count;
+
+                // DLQ Alerts Render
+                const dlqCard = document.getElementById('dlqCard');
+                const dlqList = document.getElementById('dlqList');
+                dlqList.innerHTML = "";
+                if (data.dlq_failures && data.dlq_failures.length > 0) {
+                    dlqCard.style.display = "flex";
+                    data.dlq_failures.forEach(fail => {
+                        const div = document.createElement('div');
+                        div.className = "dlq-item";
+                        div.innerHTML = `<strong>${fail.filename}</strong>: ${fail.details.split("\n")[2] || fail.details}`;
+                        dlqList.appendChild(div);
+                    });
+                } else {
+                    dlqCard.style.display = "none";
+                }
+
+                // Ingestion logs list render
+                const container = document.getElementById('logsContainer');
+                container.innerHTML = "";
+                if (data.recent_ingestions && data.recent_ingestions.length > 0) {
+                    data.recent_ingestions.forEach(log => {
+                        const item = document.createElement('div');
+                        item.className = "log-item";
+                        
+                        const isSuccess = log.status === "SUCCESS";
+                        const cleanTime = new Date(log.timestamp).toLocaleTimeString();
+                        
+                        item.innerHTML = `
+                            <div class="log-header">
+                                <span>${log.filename}</span>
+                                <span class="log-status ${isSuccess ? 'success' : 'fail'}">${log.status}</span>
+                            </div>
+                            <div class="log-details">${isSuccess ? `Parsed ${log.row_count} rows` : log.error}</div>
+                            <div style="font-size:0.65rem; color:var(--text-muted); text-align:right;">${cleanTime}</div>
+                        `;
+                        container.appendChild(item);
+                    });
+                } else {
+                    container.innerHTML = `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding: 20px;">No ingestions logged yet.</div>`;
+                }
+
+            } catch (e) {
+                console.error("Failed to load status dashboard stats", e);
+            }
+        }
+
+        // Trigger manual WMS sync
+        async function triggerWmsSync() {
+            const btn = document.getElementById('syncBtn');
+            const syncText = document.getElementById('syncText');
+            
+            btn.classList.add('loading');
+            syncText.innerText = "Syncing...";
+
+            try {
+                const res = await fetch("/api/sync", {
+                    method: "POST",
+                    headers: getHeaders()
+                });
+                const data = await res.json();
+                alert(data.message || "Sync completed successfully.");
+            } catch (e) {
+                alert("Failed to execute manual sync: " + e);
+            } finally {
+                btn.classList.remove('loading');
+                syncText.innerText = "Sync WMS Adapters";
+                loadDashboardStats();
+            }
+        }
+
+        // Handle sending chatbot message
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const msgText = input.value.trim();
+            if (!msgText) return;
+
+            // Render User Bubble
+            const history = document.getElementById('chatHistory');
+            const userRow = document.createElement('div');
+            userRow.className = "message-row user";
+            userRow.innerHTML = `<div class="message-bubble">${msgText}</div>`;
+            history.appendChild(userRow);
+            history.scrollTop = history.scrollHeight;
+
+            input.value = "";
+
+            // Render loading assistant bubble
+            const agentRow = document.createElement('div');
+            agentRow.className = "message-row agent";
+            agentRow.innerHTML = `<div class="message-bubble" id="loadingBubble">Thinking... Coordinator sequencing agent queries...</div>`;
+            history.appendChild(agentRow);
+            history.scrollTop = history.scrollHeight;
+
+            try {
+                const res = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: getHeaders(),
+                    body: JSON.stringify({ message: msgText })
+                });
+
+                if (!res.ok) {
+                    throw new Error(await res.text());
+                }
+
+                const data = await res.json();
+                
+                // Convert Markdown formatting to HTML (paragraphs and tables)
+                let htmlResponse = formatMarkdown(data.response);
+                
+                // Render Trace Execution Detail if trace exists
+                let traceHtml = "";
+                if (data.trace && data.trace.length > 0) {
+                    let traceSteps = "";
+                    data.trace.forEach(step => {
+                        const stepDataJson = JSON.stringify(step.data, null, 2);
+                        traceSteps += `
+                            <div class="trace-step">
+                                <div class="trace-step-header">${step.caller} ➜ ${step.callee}</div>
+                                <div class="trace-step-action">${step.action}</div>
+                                ${step.data ? `<pre class="trace-step-data">${stepDataJson}</pre>` : ""}
+                            </div>
+                        `;
+                    });
+                    
+                    traceHtml = `
+                        <details class="trace-inspector">
+                            <summary class="trace-summary">Execution Trace Logger</summary>
+                            <div class="trace-content">
+                                ${traceSteps}
+                            </div>
+                        </details>
+                    `;
+                }
+
+                document.getElementById('loadingBubble').parentElement.innerHTML = `
+                    <div class="message-bubble">
+                        ${htmlResponse}
+                        ${traceHtml}
+                    </div>
+                `;
+                
+            } catch (e) {
+                document.getElementById('loadingBubble').parentElement.innerHTML = `
+                    <div class="message-bubble" style="border-color:var(--accent-fail);">
+                        <strong>Error:</strong> Failed to get response from AI Coordinator. <br>
+                        <small style="color:var(--accent-fail);">${e.message}</small>
+                    </div>
+                `;
+            } finally {
+                history.scrollTop = history.scrollHeight;
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        }
+
+        // Minimalist Markdown converter for basic layout tables, bullets, and bold text
+        function formatMarkdown(text) {
+            let html = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\n\*\s(.*?)/g, '<br>• $1')
+                .replace(/\n/g, '<br>');
+
+            // Convert markdown tables
+            const tableRegex = /\|(.+)\|[\r\n]+\|[\s:-|]+\|[\r\n]+((?:\|.+[\r\n]+)+)/g;
+            html = html.replace(tableRegex, function(match, headerLine, bodyLines) {
+                let headers = headerLine.split('|').map(h => h.trim()).filter(h => h);
+                let rows = bodyLines.trim().split('<br>').map(line => {
+                    return line.split('|').map(cell => cell.trim()).filter(cell => cell);
+                }).filter(r => r.length > 0);
+
+                let headerHtml = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+                let bodyHtml = rows.map(r => '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>').join('');
+
+                return `<table><thead>${headerHtml}</thead><tbody>${bodyHtml}</tbody></table>`;
+            });
+
+            return html;
+        }
+
+        // Initial setup loads dashboard stats on launch
+        loadDashboardStats();
+    </script>
+</body>
+</html>

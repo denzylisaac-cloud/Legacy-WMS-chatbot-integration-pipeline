@@ -1,0 +1,23 @@
+sources:
+  - type: sftp
+    tenant_id: default_tenant
+    path: "./data/sftp_drop"
+    processed_path: "./data/sftp_processed"
+    format: csv
+    enabled: true
+  - type: db_poll
+    tenant_id: client_a
+    connection: "./data/wms_replica.db"
+    query: "SELECT * FROM wms_inventory"
+    enabled: true
+  - type: edi_as2
+    tenant_id: client_b
+    path: "./data/edi_inbox"
+    processed_path: "./data/edi_processed"
+    format: edi
+    enabled: true
+  - type: rest_pull
+    tenant_id: client_c
+    url: "https://api.mockwms.local/inventory"
+    format: json
+    enabled: true

@@ -1,0 +1,35 @@
+# Python Environment
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Databases and Local Storage (LanceDB and SQLite)
+data/
+*.db
+*.db-journal
+*.sqlite
+
+# Secrets
+.env
+
+# Logs and Scratch Traces
+logs/
+*.log
+math_test_out.txt
+scratch_out.txt
+scratch/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Editor configurations
+.vscode/
+.idea/
