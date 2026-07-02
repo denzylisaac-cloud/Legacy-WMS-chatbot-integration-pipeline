@@ -30,6 +30,7 @@ VALID_CREDENTIALS = {
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str = None
 
 def authenticate_tenant(authorization: str = Header(None)) -> str:
     """Validates basic authorization header and returns the authenticated tenant ID."""
@@ -71,7 +72,7 @@ async def chat_endpoint(req: ChatRequest, tenant_id: str = Depends(authenticate_
         raise HTTPException(status_code=400, detail="Empty query string.")
         
     try:
-        result = await run_warehouse_system(req.message, tenant_id=tenant_id)
+        result = await run_warehouse_system(req.message, tenant_id=tenant_id, session_id=req.session_id)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent Execution Failure: {e}")

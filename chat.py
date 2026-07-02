@@ -15,9 +15,11 @@ def load_env():
 load_env()
 
 import asyncio
+import uuid
 from src.warehouse_system.app import run_warehouse_system
 
 async def main():
+    session_id = str(uuid.uuid4())
     print("=" * 60)
     print("      WAREHOUSE MANAGEMENT INTERACTIVE CHATBOT CLI      ")
     print("========================================================")
@@ -55,7 +57,7 @@ async def main():
             print("\nAnalyzing query and executing agent workflow...")
             
             # Execute the tiered agent system
-            result = await run_warehouse_system(query)
+            result = await run_warehouse_system(query, session_id=session_id)
             
             print("\n" + "=" * 50)
             print("AGENT RESPONSE:")
