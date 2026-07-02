@@ -2,6 +2,7 @@ import os
 import re
 import numpy as np
 import lancedb
+import zlib
 from .data_parser import parse_file
 
 # Dimension of vector embedding
@@ -16,11 +17,8 @@ def text_to_vector(text, dimension=VECTOR_DIMENSION):
     vec = np.zeros(dimension, dtype=np.float32)
     for word in words:
         # Use a stable hash to avoid differences between python sessions
-        # fnv-1a or similar simple hash
-        h = 2166136261
-        for char in word:
-            h = h ^ ord(char)
-            h = (h * 16777619) & 0xffffffff
+        # Using zlib.crc32 which is much faster than manual character iteration
+        h = zlib.crc32(word.encode('utf-8'))
         idx = h % dimension
         vec[idx] += 1.0
     
