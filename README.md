@@ -65,6 +65,19 @@ graph TD
 
 ---
 
+## LLM & AI Core Providers
+
+The hierarchical agent reasoning and vector embedding layers utilize the following model setups:
+
+1.  **Primary LLM Agent Engine**: `meta/llama-3.1-8b-instruct` (or `Llama-3-Nemotron-70B-Instruct`) hosted via the **Nvidia NIM API**. This model drives the multi-agent coordination, sequential tool-calling loops, and natural-language formatting.
+2.  **Vector Embedding Engine**: `text-embedding-004` via the **Gemini Developer API** to project catalog text segments into a 128-dimensional vector space.
+3.  **Local Embedding Fallback**: A self-contained FNV-1a hashing vectorizer that runs instantly if Gemini API keys are omitted or rate-limited.
+4.  **Local Agent Reasoning Fallback**: A local rule-based deterministic emulator that runs the exact same child agent queries and stockpyl math tools locally to guarantee 100% chatbot uptime.
+
+These credentials are configured securely using a local, git-ignored `.env` file.
+
+---
+
 ## Data Ingestion & RAG Pipeline
 
 The ingestion layer (`data_parser.py`) converts multiple incoming formats into a standardized dictionary layout:
